@@ -1,0 +1,10 @@
+# Solo enviar al builder los archivos necesarios para la imagen.
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!app/
+app/**
+!app/*.py
+**/__pycache__
+**/*.pyc
