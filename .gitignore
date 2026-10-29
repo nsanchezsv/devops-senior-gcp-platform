@@ -227,3 +227,22 @@ __marimo__/
 credentials*.json
 *service-account*.json
 .aws/
+
+# Terraform - local state and generated files
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Terraform - local variables and overrides
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# GitHub Actions - temporary OIDC credentials
+gha-creds-*.json
