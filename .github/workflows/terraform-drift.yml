@@ -1,0 +1,131 @@
+
+name: Terraform Drift Detection
+
+on:
+  schedule:
+    - cron: "15 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-drift-dev
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_WORKING_DIR: terraform/environments/dev
+
+  TF_VAR_github_repository_id: ${{ vars.GH_REPOSITORY_ID }}
+  TF_VAR_github_owner_id: ${{ vars.GH_OWNER_ID }}
+
+jobs:
+  drift:
+    name: Detect Terraform Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_DRIFT_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DRIFT_SA }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.0"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false -no-color
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        shell: bash
+        run: |
+          set +e
+
+          terraform plan \
+            -detailed-exitcode \
+            -input=false \
+            -lock=false \
+            -no-color \
+            > /tmp/terraform-drift.log 2>&1
+
+          EXIT_CODE=$?
+
+          set -e
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          case "$EXIT_CODE" in
+            0)
+              echo "Terraform: no changes detected"
+              ;;
+            1)
+              echo "::error::Terraform plan failed. Review IAM, authentication and configuration."
+              ;;
+            2)
+              echo "::error::Terraform detected infrastructure differences."
+              ;;
+            *)
+              echo "::error::Unexpected Terraform exit code: $EXIT_CODE"
+              ;;
+          esac
+
+      - name: Publish detection summary
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.plan.outputs.exit_code }}
+        shell: bash
+        run: |
+          case "$EXIT_CODE" in
+            0)
+              STATUS="NO CHANGES"
+              ;;
+            1)
+              STATUS="EXECUTION ERROR"
+              ;;
+            2)
+              STATUS="DRIFT SUSPECTED"
+              ;;
+            *)
+              STATUS="CHECK NOT COMPLETED"
+              ;;
+          esac
+
+          {
+            echo "## Terraform Drift Detection"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | dev |"
+            echo "| Result | $STATUS |"
+            echo "| Exit code | ${EXIT_CODE:-N/A} |"
+            echo "| Commit | $GITHUB_SHA |"
+            echo "| Execution | $GITHUB_RUN_ID |"
+            echo ""
+            echo "Differences require manual investigation."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail when drift or error is detected
+        if: always() && steps.plan.outputs.exit_code != '0'
+        run: |
+          echo "::error::Terraform drift detection requires attention."
+          exit 1
+
