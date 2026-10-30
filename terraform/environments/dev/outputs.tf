@@ -46,3 +46,13 @@ output "github_wif_provider" {
   description = "WIF provider resource name for GitHub Actions"
   value       = google_iam_workload_identity_pool_provider.github.name
 }
+
+output "terraform_drift_email" {
+  description = "Drift Detection service account"
+  value       = google_service_account.terraform_drift.email
+}
+
+output "github_drift_wif_provider" {
+  description = "OIDC provider for scheduled drift checks"
+  value       = google_iam_workload_identity_pool_provider.github_drift.name
+}

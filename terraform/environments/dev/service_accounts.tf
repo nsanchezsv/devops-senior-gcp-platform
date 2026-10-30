@@ -12,3 +12,10 @@ resource "google_service_account" "cloudrun_runtime" {
   display_name = "Cloud Run Runtime"
   description  = "Runtime identity for FastAPI"
 }
+
+resource "google_service_account" "terraform_drift" {
+  project      = var.project_id
+  account_id   = "terraform-drift"
+  display_name = "Terraform Drift Detection"
+  description  = "Read-only identity for scheduled drift checks"
+}
