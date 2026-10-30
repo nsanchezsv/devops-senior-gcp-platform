@@ -70,7 +70,16 @@ jobs:
           EXIT_CODE=$?
 
           set -e
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "::group::Terraform diagnostic messages"
 
+            grep -E \
+            '^Error:|^  on |^  with |^  [0-9]+:' \
+            /tmp/terraform-drift.log \
+            | head -40 || true
+
+            echo "::endgroup::"
+          fi
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
           case "$EXIT_CODE" in
